@@ -45,6 +45,15 @@ class HTZSafe : public Component, public uart::UARTDevice {
   uint32_t bytes_skipped_ = 0;
   uint32_t loop_count_ = 0;
   uint32_t last_log_time_ = 0;
+  
+  // Pending activation tracking
+  uint16_t pending_identifier_ = 0;
+  uint8_t consecutive_0x92_count_ = 0;
+  uint8_t extra_bytes_count_ = 0;  // Count of 4 extra bytes after identifier
+  uint32_t pending_activation_time_ = 0;
+  static const uint32_t ACTIVATION_WINDOW = 2000;  // 2 seconds
+  static const uint8_t REQUIRED_0x92_COUNT = 10;
+  static const uint8_t EXTRA_BYTES_COUNT = 4;  // 4 bytes between identifier and 0x92s
 };
 
 }  // namespace htzsafe

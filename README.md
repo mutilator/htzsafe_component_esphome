@@ -37,7 +37,149 @@ Connect the receiver board to the ESP32 as follows:
 
 **Note:** The receiver board has clearly marked pins as shown in the image above.
 
-## Installation
+## Quick Start
+
+### Prerequisites
+
+- Python 3.9 or newer
+- ESPHome installed (`pip install esphome`)
+- USB cable to connect ESP32 to your computer
+- WiFi credentials
+
+### Step-by-Step Setup
+
+#### 1. Clone the Repository
+
+```bash
+git clone https://github.com/mutilator/htzsafe_component_esphome.git
+cd htzsafe_component_esphome
+```
+
+#### 2. Create Secrets File
+
+Create a `secrets.yaml` file in the project root:
+
+```bash
+nano secrets.yaml
+```
+
+Add your credentials:
+
+```yaml
+wifi_ssid: "YourWiFiSSID"
+wifi_password: "YourWiFiPassword"
+fast_connect: "false"
+esp_encryption_key: "your-32-character-encryption-key-here="
+ap_mode_pw: "fallback-password"
+```
+
+**Note:** Generate an encryption key with: `esphome wizard dummy.yaml` (it will generate a random key you can copy)
+
+#### 3. Edit Configuration
+
+Edit `owl-sensor.yaml` and update the device name and friendly name if desired:
+
+```bash
+nano owl-sensor.yaml
+```
+
+For initial setup, **comment out or remove** the devices section temporarily:
+
+```yaml
+htzsafe:
+  id: owl_sensor
+  uart_id: htzsafe_uart
+  # devices:  # Comment this out initially to identify your sensors
+  #   - id: driveway_sensor
+  #     name: "Driveway"
+  #     identifier: 0xe864
+```
+
+#### 4. Connect ESP32
+
+Connect your ESP32 board to your computer via USB.
+
+#### 5. Build and Flash
+
+First time flashing (via USB):
+
+```bash
+esphome run owl-sensor.yaml
+```
+
+This will:
+- Compile the firmware
+- Detect your connected ESP32
+- Flash the firmware
+- Show live logs
+
+Select the USB port when prompted (usually `/dev/ttyUSB0` on Linux, `COM3` on Windows, or `/dev/cu.usbserial-*` on macOS).
+
+#### 6. Identify Your Sensors
+
+With the ESP32 running and logs visible:
+
+1. Trigger each motion sensor one at a time
+2. Watch the logs for messages like:
+
+```
+[20:15:06.905][W][htzsafe:085]: Unknown device identifier: 0x926a
+```
+
+3. Copy each identifier and add it to your configuration:
+
+```bash
+nano owl-sensor.yaml
+```
+
+Uncomment and update the devices section:
+
+```yaml
+htzsafe:
+  id: owl_sensor
+  uart_id: htzsafe_uart
+  devices:
+    - id: driveway_sensor
+      name: "Driveway"
+      identifier: 0x926a  # Replace with your actual identifier
+    - id: mailbox_sensor
+      name: "Mailbox"
+      identifier: 0xe76a  # Replace with your actual identifier
+```
+
+#### 7. Update Firmware Over-The-Air (OTA)
+
+After the initial flash, you can update wirelessly:
+
+```bash
+esphome run owl-sensor.yaml
+```
+
+Select the network option (it will show the device's IP address).
+
+**Or compile only:**
+
+```bash
+esphome compile owl-sensor.yaml
+```
+
+#### 8. View Logs
+
+To monitor logs without reflashing:
+
+```bash
+esphome logs owl-sensor.yaml
+```
+
+Or connect to the device directly:
+
+```bash
+esphome logs owl-sensor.yaml --device 192.168.1.xxx
+```
+
+## Manual Installation (Alternative)
+
+If you prefer to integrate this component into an existing ESPHome setup:
 
 ### 1. Copy Component Files
 
@@ -53,39 +195,9 @@ your-esphome-config/
 └── your-device.yaml
 ```
 
-### 2. Create ESPHome Configuration
+### 2. Add to Your Configuration
 
-Use the `owl-sensor.yaml` as a reference.
-
-### 3. Identify Your Sensors
-
-Before you can use the sensors, you need to determine their unique identifiers:
-
-1. Flash the ESP32 with a basic configuration (without any devices listed)
-2. Power on each motion sensor one at a time
-3. Watch the ESPHome logs for messages like:
-
-```
-[20:15:06.905][W][htzsafe:085]: Unknown device identifier: 0x926a
-```
-
-4. Copy the identifier (e.g., `0x926a`) and add it to your configuration:
-
-```yaml
-htzsafe:
-  id: motion_receiver
-  uart_id: htzsafe_uart
-  devices:
-    - id: driveway_sensor
-      name: "Driveway"
-      identifier: 0x926a  # Your actual identifier
-```
-
-### 4. Flash and Deploy
-
-```bash
-esphome run your-device.yaml
-```
+Reference the example `owl-sensor.yaml` configuration and adapt it to your setup.
 
 ## Configuration Details
 
@@ -118,6 +230,8 @@ The receiver uses a simple serial protocol:
 - **Baud rate:** 9600
 - **Header:** `0xebaf05` (3 bytes)
 - **Identifier:** 2-byte unique ID for each sensor
+- **Additional Data** 4 bytes with unknown data
+- **Padding for sound** Sends 0x92 while the tone is sending, we look for 10 consecutive 0x92 bytes for 2 seconds after a header is received. This keeps from seeing false positives when the devices send "pings" back to the receiver.
 - **Total message:** 5 bytes
 
 When a sensor is triggered:
