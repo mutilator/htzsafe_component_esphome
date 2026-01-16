@@ -35,7 +35,7 @@ Connect the receiver board to the ESP32 as follows:
 
 ![HTZSafe Receiver Pins](htzsafe_receiver_top.png)
 
-**Note:** The receiver board has clearly marked pins as shown in the image above.
+**Note:** The receiver board has clearly marked pins as shown in the image above. Use the +5V pin that's marked `ABOVE` these pins, `NOT` the 3.3v pin in the image. Connect 5v to VCC on the ESP32.
 
 ## Quick Start
 
@@ -48,14 +48,7 @@ Connect the receiver board to the ESP32 as follows:
 
 ### Step-by-Step Setup
 
-#### 1. Clone the Repository
-
-```bash
-git clone https://github.com/mutilator/htzsafe_component_esphome.git
-cd htzsafe_component_esphome
-```
-
-#### 2. Create Secrets File
+#### 1. Create Secrets File
 
 Create a `secrets.yaml` file in the project root:
 
@@ -75,7 +68,7 @@ ap_mode_pw: "fallback-password"
 
 **Note:** Generate an encryption key with: `esphome wizard dummy.yaml` (it will generate a random key you can copy)
 
-#### 3. Edit Configuration
+#### 2. Edit Configuration
 
 Edit `owl-sensor.yaml` and update the device name and friendly name if desired:
 
@@ -86,25 +79,102 @@ nano owl-sensor.yaml
 For initial setup, **comment out or remove** the devices section temporarily:
 
 ```yaml
+substitutions:
+  device_name: owl-sensor
+  device_id: owl-sensor
+  friendly_name: Owl sensor
+  device_description: ESP32
+  icon: "mdi:motion-sensor"
+
+esphome:
+  name: "${device_name}"
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.f_cpu: 80000000L  # Run at 80MHz to reduce power
+  on_boot:
+    priority: 600
+    then:
+      - lambda: |-
+          // Disable brownout detector
+          #include "soc/rtc_cntl_reg.h"
+          #include "soc/soc.h"
+          WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
+esp32:
+  board: nodemcu-32s
+  framework:
+    type: arduino
+    # Disable brownout detector to prevent restart loops
+    version: recommended
+  # Reduce startup power
+  variant: esp32
+
+# Enable logging
+logger:
+  baud_rate: 0  # Disable UART logging to reduce startup power
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret esp_encryption_key
+
+ota:
+ - platform: esphome
+
+wifi:
+  ssid: !secret privateCloud_wifi_ssid
+  password: !secret privateCloud_wifi_password
+  fast_connect: !secret fast_connect
+  domain: .lan
+  output_power: 8.5dB  # Reduced WiFi TX power to lower startup surge
+  # fast_connect reduces WiFi connection time and startup power
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "${device_name}"
+    password: !secret ap_mode_pw
+
+captive_portal:
+
+external_components:
+  - source: github://mutilator/htzsafe_component_esphome
+    refresh: 0d # optional
+    components: [htzsafe]
+
+uart:
+  - id: htzsafe_uart
+    tx_pin: GPIO17
+    rx_pin: GPIO16
+    baud_rate: 9600
+
 htzsafe:
   id: owl_sensor
   uart_id: htzsafe_uart
-  # devices:  # Comment this out initially to identify your sensors
-  #   - id: driveway_sensor
-  #     name: "Driveway"
-  #     identifier: 0xe864
+#  devices:
+#    - id: driveway_sensor
+#      name: "Driveway"
+#      identifier: 0x1234
+
+button:
+  - platform: restart
+    name: "Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi signal"
+    update_interval: 60s
+
 ```
 
-#### 4. Connect ESP32
+#### 3. Connect ESP32
 
 Connect your ESP32 board to your computer via USB.
 
-#### 5. Build and Flash
+#### 4. Build and Flash
 
 First time flashing (via USB):
 
 ```bash
-esphome run owl-sensor.yaml
+esphome run --device COM1 owl-sensor.yaml
 ```
 
 This will:
@@ -113,7 +183,7 @@ This will:
 - Flash the firmware
 - Show live logs
 
-Select the USB port when prompted (usually `/dev/ttyUSB0` on Linux, `COM3` on Windows, or `/dev/cu.usbserial-*` on macOS).
+Select the USB port for your OS (usually `/dev/ttyUSB0` on Linux, `COM1` on Windows, or `/dev/cu.usbserial-*` on macOS).
 
 #### 6. Identify Your Sensors
 
